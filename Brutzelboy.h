@@ -1,3 +1,7 @@
+#pragma once
+#include <lcdgfx.h>
+#include <WiFiClient.h>
+
 #define RG_GAMEPAD_ADC1_MAP {\
     {RG_KEY_UP,    ADC1_CHANNEL_6, ADC_ATTEN_DB_11, 3072, 4096},\
     {RG_KEY_DOWN,  ADC1_CHANNEL_6, ADC_ATTEN_DB_11, 1024, 3072},\
@@ -54,4 +58,18 @@
 #define RG_USB_DP                   GPIO_NUM_20
 #define RG_USB_DM                   GPIO_NUM_19
 
+class Brutzelboy {
+private:
+ void initDisplay();
 
+public:
+  Brutzelboy();
+  void begin();
+  void initWiFi(String ssid, String password);
+  DisplayILI9341_240x320x16_SPI getLCD();
+  void printAt(uint8_t x, uint8_t y, String str);
+  void printAt(uint8_t x, uint8_t y, char* charStr);
+  void setFont(const uint8_t* font);
+  void setTextColor(uint8_t r, uint8_t g, uint8_t b);
+  void clearLCD();
+};

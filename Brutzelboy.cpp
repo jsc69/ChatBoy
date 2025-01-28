@@ -37,7 +37,7 @@ void Brutzelboy::begin() {
     initDisplay();
     initSPIFFS();
     initAudio();
-    initSDCard();
+    //initSDCard();
     initWiFi();
 }
 
@@ -48,11 +48,11 @@ void Brutzelboy::initDisplay() {
 }
 
 void Brutzelboy::initWiFi() {
-  readWifiConfig();
-  if (strlen(ssid) == 0 || strlen(pwd) == 0) {
-    Serial.println("Error: WIFI could not established. No credentials found!");
-    return;
-  }
+  //readWifiConfig();
+  //if (strlen(ssid) == 0 || strlen(pwd) == 0) {
+  //  Serial.println("Error: WIFI could not established. No credentials found!");
+  //  return;
+  //}
   Serial.print("Verbinde mit WiFi");
   WiFi.begin(ssid, pwd);
   while (WiFi.status() != WL_CONNECTED) {
@@ -75,7 +75,7 @@ void Brutzelboy::initAudio() {
 }
 
 void Brutzelboy::initSDCard() {
-  SPI.begin(RG_GPIO_SDSPI_CLK, RG_GPIO_SDSPI_MISO, RG_GPIO_SDSPI_MOSI, RG_GPIO_SDSPI_CS);
+  SPI.begin(RG_GPIO_SDSPI_CLK, RG_GPIO_SDSPI_MISO, RG_GPIO_SDSPI_MOSI, -1);
   while (!SD.begin(RG_GPIO_SDSPI_CS)) {
     Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
     delay(1000);

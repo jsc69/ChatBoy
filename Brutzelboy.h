@@ -1,6 +1,9 @@
 #pragma once
-#include <lcdgfx.h>
 #include <WiFiClient.h>
+#include <FS.h>
+
+#define RG_LCD_WIDTH 288
+#define RG_LCD_HEIGHT 240
 
 #define RG_GAMEPAD_ADC1_MAP {\
     {RG_KEY_UP,    ADC1_CHANNEL_6, ADC_ATTEN_DB_11, 3072, 4096},\
@@ -60,16 +63,30 @@
 
 class Brutzelboy {
 private:
- void initDisplay();
+  void initDisplay();
+  void renderJPEG();
+  void initAudio();
+  void initSPIFFS();
+  void initSDCard();
 
 public:
   Brutzelboy();
   void begin();
-  void initWiFi(String ssid, String password);
-  DisplayILI9341_240x320x16_SPI getLCD();
-  void printAt(uint8_t x, uint8_t y, String str);
-  void printAt(uint8_t x, uint8_t y, char* charStr);
-  void setFont(const uint8_t* font);
+  void loop();
+  void initWiFi();
+
+  void setLed(boolean on);
+  
+  void printDirectAt(uint16_t x, uint16_t y, char* charStr);
   void setTextColor(uint8_t r, uint8_t g, uint8_t b);
   void clearLCD();
+  void drawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled);
+  bool displayImageFromURL(const char* url);
+
+  void playTTS(const char* text, const char* language);
+  void playURL(const char* url);
+  void playFile(const char* path);
+  void setVolume(int volume);
+
+  void readWifiConfig();
 };

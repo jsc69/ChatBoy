@@ -30,6 +30,32 @@ uint32_t previousMillis = -interval; // Zeitstempel der letzten Aktion
 
 SET_LOOP_TASK_STACK_SIZE(8192);
 
+uint16_t flash = 0;
+int8_t volume = 16;
+
+void onKeyEvent(const uint8_t event, const uint16_t value) {
+  if (event == EVENT_KEY_UP) {
+    if (value == KEY_OPTION) {
+      if (volume < 21) {
+        boy.setVolume(++volume);
+      }
+      Serial.printf("Volume set to %d\n", volume);
+    } else if (value == KEY_MENU) {
+      if (volume > 0) {
+        boy.setVolume(--volume);
+      }
+      Serial.printf("Volume set to %d\n", volume);
+    }
+
+//    if (value == KEY_UP) Serial.println("UP");
+//    if (value == KEY_DOWN) Serial.println("DOWN");
+//    if (value == KEY_LEFT) Serial.println("LEFT");
+//    if (value == KEY_RIGHT) Serial.println("RIGHT");
+    if (value == KEY_A) boy.setLed(true);
+    if (value == KEY_B) boy.setLed(false);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Welcome to ChatBoy");
@@ -40,22 +66,23 @@ void setup() {
 
   client.setCallback(callback);
   boy.printDirectAt(5, 10, "Waiting for thumbnail");
-  boy.setVolume(21);
+
+  boy.setKeyEventHandler(onKeyEvent);
 }
 
-uint16_t flash = 0;
 void loop() {
+  client.loop();
+  boy.loop();
+
   if (!client.connected()) {
     connectToTwitch();
   }
   
   if (flash > 0) {
     if (flash % 2000 == 0) {
-      //Serial.println("LED off");
       boy.setLed(false);
     } else if (flash % 1000 == 0) {
-      //Serial.println("LED on");
-      boy.setLed(true);
+      Serial.println("LED on");
     }
     flash--;
   } else {
@@ -68,8 +95,9 @@ void loop() {
     previousMillis = currentMillis;
   }
 
-  client.loop();
-  boy.loop();
+  //uint16_t updown = analogRead(7);
+  //uint16_t leftright = analogRead(6);
+  //Serial.printf("%d - %d\n", updown, leftright);
 }
 
 void connectToTwitch() {

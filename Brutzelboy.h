@@ -11,16 +11,6 @@
     {RG_KEY_LEFT,  ADC1_CHANNEL_5, ADC_ATTEN_DB_11, 3072, 4096},\
     {RG_KEY_RIGHT, ADC1_CHANNEL_5, ADC_ATTEN_DB_11, 1024, 3072},\
 }
-#define RG_GAMEPAD_GPIO_MAP {\
-    {RG_KEY_SELECT, GPIO_NUM_16, GPIO_PULLUP_ONLY, 0},\
-    {RG_KEY_START,  GPIO_NUM_17, GPIO_PULLUP_ONLY, 0},\
-    {RG_KEY_MENU,   GPIO_NUM_18, GPIO_PULLUP_ONLY, 0},\
-    {RG_KEY_OPTION, GPIO_NUM_0,  GPIO_FLOATING,    0},\
-    {RG_KEY_A,      GPIO_NUM_15, GPIO_PULLUP_ONLY, 0},\
-    {RG_KEY_B,      GPIO_NUM_5,  GPIO_PULLUP_ONLY, 0},\
-}
-// Boot key
-#define RG_KEY_BOOT                 GPIO_NUM_0
 
 // Battery
 #define RG_BATTERY_DRIVER           1
@@ -61,6 +51,38 @@
 #define RG_USB_DP                   GPIO_NUM_20
 #define RG_USB_DM                   GPIO_NUM_19
 
+// Keys IO
+#define RG_GPIO_KEY_SELECT GPIO_NUM_16
+#define RG_GPIO_KEY_START  GPIO_NUM_17
+#define RG_GPIO_KEY_MENU   GPIO_NUM_18
+#define RG_GPIO_KEY_OPTION GPIO_NUM_8
+#define RG_GPIO_KEY_A      GPIO_NUM_15
+#define RG_GPIO_KEY_B      GPIO_NUM_5
+#define RG_GPIO_KEY_BOOT   GPIO_NUM_0
+#define RG_ADC_UP_DOWN     7
+#define RG_ADC_LEFT_RIGHT  6
+
+// Keys
+#define KEY_UP      1
+#define KEY_DOWN    2
+#define KEY_LEFT    4
+#define KEY_RIGHT   8
+#define KEY_SELECT  16
+#define KEY_START   32
+#define KEY_MENU    64
+#define KEY_OPTION  128
+#define KEY_A       256
+#define KEY_B       512
+#define KEY_BOOT    1024
+
+// Key events
+#define EVENT_KEY_DOWN    1
+#define EVENT_KEY_UP      2
+
+// Sound events
+#define EVENT_SOUND_START 1
+#define EVENT_SOUND_STOP  2
+
 class Brutzelboy {
 private:
   void initDisplay();
@@ -68,6 +90,13 @@ private:
   void initAudio();
   void initSPIFFS();
   void initSDCard();
+  void readWifiConfig();
+
+  uint16_t keys;
+  void checkKeys();
+  void processKey(uint16_t key, bool pressed);
+  void (*keyEventHandler)(const uint8_t event, const uint16_t value);
+  void (*soundEventHandler)(const uint8_t event, const uint16_t value);
 
 public:
   Brutzelboy();
@@ -88,5 +117,11 @@ public:
   void playFile(const char* path);
   void setVolume(int volume);
 
-  void readWifiConfig();
+  bool isKeyPressed(const uint16_t key);
+
+  void setKeyEventHandler(void (*userDefinedEventHandler)(const uint8_t event, const uint16_t value)) {
+    keyEventHandler = userDefinedEventHandler; }
+  void setSoundEventHandler(void (*userDefinedEventHandler)(const uint8_t event, const uint16_t value)) {
+    soundEventHandler = userDefinedEventHandler; }
+
 };

@@ -1,3 +1,6 @@
+#include "hal/adc_types.h"
+#include "esp32-hal-adc.h"
+#include "esp32-hal-gpio.h"
 #include <cstring>
 #include <stdint.h>
 #include "HardwareSerial.h"
@@ -29,16 +32,28 @@ char pwd[200];
 Audio audio;
 bool soundIsPlaying = false;
 
+// Dummy function, if handler are not used
+void doNothing(const uint8_t event, const uint16_t value) {}
+
 Brutzelboy::Brutzelboy() {
+  keyEventHandler = doNothing;
+  soundEventHandler = doNothing;
 }
 
 void Brutzelboy::begin() {
-    pinMode(RG_GPIO_LED, OUTPUT);
-    initDisplay();
-    initSPIFFS();
-    initAudio();
-    initSDCard();
-    initWiFi();
+  pinMode(RG_GPIO_KEY_SELECT, INPUT_PULLUP);
+  pinMode(RG_GPIO_KEY_START,  INPUT_PULLUP);
+  pinMode(RG_GPIO_KEY_MENU,   INPUT_PULLUP);
+  pinMode(RG_GPIO_KEY_OPTION, INPUT_PULLUP);
+  pinMode(RG_GPIO_KEY_A,      INPUT_PULLUP);
+  pinMode(RG_GPIO_KEY_B,      INPUT_PULLUP);
+  pinMode(RG_GPIO_KEY_BOOT,   INPUT_PULLUP);
+
+  initDisplay();
+  initSPIFFS();
+  initAudio();
+  initSDCard();
+  initWiFi();
 }
 
 void Brutzelboy::initDisplay() {
@@ -148,17 +163,85 @@ void Brutzelboy::drawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool f
   }
 }
 
-
 void Brutzelboy::loop() {
     audio.loop();
+    checkKeys();
 }
 
+void Brutzelboy::checkKeys() {
+  // Analog Keys
+  uint16_t updown = analogRead(RG_ADC_UP_DOWN);
+  uint16_t leftright = analogRead(RG_ADC_LEFT_RIGHT);
+  bool up = false;
+  bool down = false;
+  bool left = false;
+  bool right = false;
+  if (updown > 2800) {
+    up = true;
+  } else if (updown > 1000) {
+    down = true;
+  }
+  if (leftright > 2800) {
+    left = true;
+  } else if (leftright > 1000) {
+    right = true;
+  }
+
+  processKey(KEY_UP, up);
+  processKey(KEY_DOWN, down);
+  processKey(KEY_LEFT, left);
+  processKey(KEY_RIGHT, right);
+
+  // Digital Keys
+  uint16_t key=0;
+  for (uint16_t i = 16; i<=1024; i=i<<1) {
+    switch (i) {
+    case KEY_SELECT:
+      key = RG_GPIO_KEY_SELECT;
+      break;
+    case KEY_START:
+      key = RG_GPIO_KEY_START;
+      break;
+    case KEY_MENU:
+      key = RG_GPIO_KEY_MENU;
+      break;
+    case KEY_OPTION:
+      key = RG_GPIO_KEY_OPTION;
+      break;
+    case KEY_A:
+      key = RG_GPIO_KEY_A;
+      break;
+    case KEY_B:
+      key = RG_GPIO_KEY_B;
+      break;
+    case KEY_BOOT:
+      key = RG_GPIO_KEY_BOOT;
+      break;
+    }
+    processKey(i, !digitalRead(key));
+  }
+}
+
+void Brutzelboy::processKey(uint16_t key, bool pressed) {
+  if (pressed) {
+    if (!(keys & key)) {
+      keyEventHandler(EVENT_KEY_DOWN, key);
+    }
+    keys |= key;
+  } else {
+    if (keys & key) {
+      keyEventHandler(EVENT_KEY_UP, key);
+    }
+    keys &= ~key; 
+  }
+}
 
 void Brutzelboy::setLed(boolean on) {
-  if (on)
+  if (on) {
     digitalWrite(RG_GPIO_LED, HIGH);
-  else
+  } else {
     digitalWrite(RG_GPIO_LED, LOW);
+  }
 }
 
 
@@ -304,4 +387,6 @@ void Brutzelboy::readWifiConfig() {
   file.close();
 }
 
-
+bool Brutzelboy::isKeyPressed(const uint16_t key) {
+  return keys & key;
+}

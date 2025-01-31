@@ -35,22 +35,18 @@ int8_t volume = 16;
 
 void onKeyEvent(const uint8_t event, const uint16_t value) {
   if (event == EVENT_KEY_UP) {
-    if (value == KEY_OPTION) {
+    if (value == KEY_OPTION || value == KEY_UP || value == KEY_RIGHT) {
       if (volume < 21) {
         boy.setVolume(++volume);
       }
       Serial.printf("Volume set to %d\n", volume);
-    } else if (value == KEY_MENU) {
+    } else if (value == KEY_MENU || value == KEY_DOWN || value == KEY_LEFT) {
       if (volume > 0) {
         boy.setVolume(--volume);
       }
       Serial.printf("Volume set to %d\n", volume);
     }
 
-//    if (value == KEY_UP) Serial.println("UP");
-//    if (value == KEY_DOWN) Serial.println("DOWN");
-//    if (value == KEY_LEFT) Serial.println("LEFT");
-//    if (value == KEY_RIGHT) Serial.println("RIGHT");
     if (value == KEY_A) boy.setLed(true);
     if (value == KEY_B) boy.setLed(false);
   }

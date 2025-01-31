@@ -168,57 +168,72 @@ void Brutzelboy::loop() {
     checkKeys();
 }
 
+uint16_t upCount = 0;
+uint16_t downCount = 0;
+uint16_t leftCount = 0;
+uint16_t rightCount = 0;
+uint16_t trigger = 300;
+uint16_t topBorder = 1800;
+uint16_t bottomBorder = 1000;
+
 void Brutzelboy::checkKeys() {
   // Analog Keys
   uint16_t updown = analogRead(RG_ADC_UP_DOWN);
   uint16_t leftright = analogRead(RG_ADC_LEFT_RIGHT);
-  bool up = false;
-  bool down = false;
-  bool left = false;
-  bool right = false;
-  if (updown > 2800) {
-    up = true;
-  } else if (updown > 1000) {
-    down = true;
+
+  if (updown > topBorder) {
+    if (upCount <= trigger) upCount++;
+    downCount = 0;
+  } else if (updown > bottomBorder) {
+    if (upCount <= trigger) downCount++;
+    upCount = 0;
+  } else {
+    if (upCount <= trigger) upCount = 0;
+    downCount = 0;
   }
-  if (leftright > 2800) {
-    left = true;
-  } else if (leftright > 1000) {
-    right = true;
+  if (leftright > topBorder) {
+    if (upCount <= trigger) leftCount++;
+    rightCount = 0;
+  } else if (leftright > bottomBorder) {
+    if (upCount <= trigger) rightCount++;
+    leftCount = 0;
+  } else {
+    leftCount = 0;
+    rightCount = 0;
   }
 
-  processKey(KEY_UP, up);
-  processKey(KEY_DOWN, down);
-  processKey(KEY_LEFT, left);
-  processKey(KEY_RIGHT, right);
+  processKey(KEY_UP, upCount >= trigger);
+  processKey(KEY_DOWN, downCount >= trigger);
+  processKey(KEY_LEFT, leftCount >= trigger);
+  processKey(KEY_RIGHT, rightCount >= trigger);
 
   // Digital Keys
-  uint16_t key=0;
+  uint8_t gpio=0;
   for (uint16_t i = 16; i<=1024; i=i<<1) {
     switch (i) {
     case KEY_SELECT:
-      key = RG_GPIO_KEY_SELECT;
+      gpio = RG_GPIO_KEY_SELECT;
       break;
     case KEY_START:
-      key = RG_GPIO_KEY_START;
+      gpio = RG_GPIO_KEY_START;
       break;
     case KEY_MENU:
-      key = RG_GPIO_KEY_MENU;
+      gpio = RG_GPIO_KEY_MENU;
       break;
     case KEY_OPTION:
-      key = RG_GPIO_KEY_OPTION;
+      gpio = RG_GPIO_KEY_OPTION;
       break;
     case KEY_A:
-      key = RG_GPIO_KEY_A;
+      gpio = RG_GPIO_KEY_A;
       break;
     case KEY_B:
-      key = RG_GPIO_KEY_B;
+      gpio = RG_GPIO_KEY_B;
       break;
     case KEY_BOOT:
-      key = RG_GPIO_KEY_BOOT;
+      gpio = RG_GPIO_KEY_BOOT;
       break;
     }
-    processKey(i, !digitalRead(key));
+    processKey(i, !digitalRead(gpio));
   }
 }
 

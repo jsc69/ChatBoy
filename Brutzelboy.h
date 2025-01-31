@@ -92,9 +92,12 @@ private:
   void initSDCard();
   void readWifiConfig();
 
+  void playQueuedSound();
+
   uint16_t keys;
   void checkKeys();
   void processKey(uint16_t key, bool pressed);
+
   void (*keyEventHandler)(const uint8_t event, const uint16_t value);
   void (*soundEventHandler)(const uint8_t event, const uint16_t value);
 
@@ -112,6 +115,9 @@ public:
   void drawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled);
   bool displayImageFromURL(const char* url);
 
+  void addTTSSoundToQueue(const char* source, const char* language);
+  void addFileSoundToQueue(const char* source);
+  void addUrlSoundToQueue(const char* source);
   void playTTS(const char* text, const char* language);
   void playURL(const char* url);
   void playFile(const char* path);

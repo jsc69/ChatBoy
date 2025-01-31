@@ -16,12 +16,13 @@
 /**
   used library
   - Adafruit ILI9341 by Adafruit
-  - Adafruit GFX Library by Adafruit
+  - Adafruit GFX Library by Adafruit (incl. Adafruit BusIO)
   - ESP32-audioI2S-master by schreibfaul1
   - JPEGDecoder by Bodmer
 */
 
 #define IMAGE_BUFFER_SIZE 1024
+#define SOUND_QUEUE_LENGTH 25
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(RG_GPIO_LCD_CS, RG_GPIO_LCD_DC, RG_GPIO_LCD_MOSI, RG_GPIO_LCD_CLK, RG_GPIO_LCD_RST, RG_GPIO_LCD_MISO);
 
@@ -31,6 +32,16 @@ char pwd[200];
 
 Audio audio;
 bool soundIsPlaying = false;
+enum SoundType {tts, file, url};
+struct Sound {
+  SoundType type;
+  char source[500];
+  char language[2];
+};
+Sound soundQueue[SOUND_QUEUE_LENGTH];
+uint8_t soundPlayed = -1;
+uint8_t queuePointer = -1;
+
 
 // Dummy function, if handler are not used
 void doNothing(const uint8_t event, const uint16_t value) {}
@@ -97,12 +108,11 @@ void Brutzelboy::initSDCard() {
   }
 }
 
-uint8_t maxLength = 200; // Google TTS seems to be limited (by time?). So 200 char will be enough.
 void Brutzelboy::playTTS(const char* text, const char* language) {
   if (!soundIsPlaying) {
     soundIsPlaying = true;
-    char buf[maxLength];
-    strlcpy(buf, text, maxLength);
+    char buf[500];
+    strcpy(buf, text);
     Serial.printf("talk: '%s'\n", buf);
     audio.connecttospeech(buf, language);
   } else {
@@ -121,6 +131,80 @@ void Brutzelboy::playFile(const char* path) {
   if (!soundIsPlaying) {
     soundIsPlaying = true;
     audio.connecttoFS(SD, path);
+  }
+}
+
+void Brutzelboy::addTTSSoundToQueue(const char* source, const char* language) {
+  queuePointer++;
+  if (queuePointer >= SOUND_QUEUE_LENGTH) {
+    queuePointer = 0;
+  }
+  if (soundPlayed == queuePointer) {
+    Serial.printf("Skip '%s'\n", source);
+    queuePointer--;
+    return;
+  }
+  Sound current = soundQueue[queuePointer];
+  current.type = tts;
+  strcpy(current.source, source);
+  strcpy(current.language, language);
+  soundQueue[queuePointer] = current;
+}
+
+void Brutzelboy::addFileSoundToQueue(const char* source) {
+  queuePointer++;
+  if (queuePointer >= SOUND_QUEUE_LENGTH) {
+    queuePointer = 0;
+  }
+  if (soundPlayed == queuePointer) {
+    Serial.printf("Skip '%s'\n", source);
+    queuePointer--;
+    return;
+  }
+
+  Sound current = soundQueue[queuePointer];
+  current.type = file;
+  strcpy(current.source, source);
+  soundQueue[queuePointer] = current;
+}
+
+void Brutzelboy::addUrlSoundToQueue(const char* source) {
+  queuePointer++;
+  if (queuePointer >= SOUND_QUEUE_LENGTH) {
+    queuePointer = 0;
+  }
+  if (soundPlayed == queuePointer) {
+    Serial.printf("Skip '%s'\n", source);
+    queuePointer--;
+    return;
+  }
+
+  Sound current = soundQueue[queuePointer];
+  current.type = url;
+  strcpy(current.source, source);
+  soundQueue[queuePointer] = current;
+}
+
+void Brutzelboy::playQueuedSound() {
+  if (soundIsPlaying || soundPlayed == queuePointer) {
+    return;
+  }
+  soundPlayed++;
+  if (soundPlayed >= SOUND_QUEUE_LENGTH) {
+    soundPlayed = 0;
+  }
+  Sound current = soundQueue[soundPlayed];
+
+  switch(current.type){
+    case tts:
+      playTTS(current.source, current.language);
+      break;
+    case file:
+      playFile(current.source);
+      break;
+    case url:
+      playURL(current.source);
+      break;
   }
 }
 
@@ -164,8 +248,11 @@ void Brutzelboy::drawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool f
 }
 
 void Brutzelboy::loop() {
-    audio.loop();
-    checkKeys();
+  if (!soundIsPlaying) {
+    playQueuedSound();
+  }
+  audio.loop();
+  checkKeys();
 }
 
 uint16_t upCount = 0;

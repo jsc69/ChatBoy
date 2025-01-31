@@ -12,7 +12,7 @@
 #define FONT_HEIGHT 10
 
 // Name des Channels in Kleinbuchstaben - z.B. "thebrutzler"
-const String twitchChannelName = "thebrutzler";
+const String twitchChannelName = "kekluck";
 const String urlThumbnail  = "https://static-cdn.jtvnw.net/previews-ttv/live_user_" + twitchChannelName + "-288x162.jpg";
 
 WiFiClient wifiClient;
@@ -90,10 +90,6 @@ void loop() {
     boy.displayImageFromURL(urlThumbnail.c_str());
     previousMillis = currentMillis;
   }
-
-  //uint16_t updown = analogRead(7);
-  //uint16_t leftright = analogRead(6);
-  //Serial.printf("%d - %d\n", updown, leftright);
 }
 
 void connectToTwitch() {
@@ -126,7 +122,7 @@ void callback(IRCMessage ircMessage) {
       talk.replace("!tts", "");
     }
     talk.replace("_", " ");
-    boy.playTTS(talk.c_str(), "de");
+    boy.addTTSSoundToQueue(talk.c_str(), "de");
     
     if (talk.equals("!ttscn ^") || talk.indexOf("jensefu") >= 0) {
       flash=10000;

@@ -1,5 +1,15 @@
-# WIP! - ChatBoy
+# ChatBoy
 Twitch chat client for theButzler's ESP32 GBC Retrofit [see](https://github.com/theBrutzler/ESP32_GBC_RETROFIT).
+
+# Work in progress
+Open points:
+* faster LCD with double buffering - other library?
+* why is TTS limited?
+* IR Leds
+* Clean up ;)
+* transform into a library
+* handle error when SD Card could not be found
+* handle PSRAM error
 
 # Used idf-release_v5.3 (Board Manager esp32 by Espressif Systems 3.1.1) and following libraries
 * Using library ArduinoIRC at version 0.2.0 in folder: <ARDUINO_HOME>libraries/ArduinoIRC 

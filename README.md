@@ -1,4 +1,4 @@
-# ChatBoy
+# WIP! - ChatBoy
 Twitch chat client for theButzler's ESP32 GBC Retrofit [see](https://github.com/theBrutzler/ESP32_GBC_RETROFIT).
 
 # Used idf-release_v5.3 (Board Manager esp32 by Espressif Systems 3.1.1) and following libraries

@@ -50,8 +50,8 @@ void onKeyEvent(const uint8_t event, const uint16_t value) {
       Serial.printf("Volume set to %d\n", volume);
     }
 
-    if (value == KEY_A) boy.setLed(true);
-    if (value == KEY_B) boy.setLed(false);
+    if (value == KEY_A) boy.setLcd(true);
+    if (value == KEY_B) boy.setLcd(false);
   }
 }
 
@@ -93,7 +93,7 @@ void loop() {
     if (flash % 2000 == 0) {
       boy.setLed(false);
     } else if (flash % 1000 == 0) {
-      Serial.println("LED on");
+      boy.setLed(true);
     }
     flash--;
   } else {

@@ -1,12 +1,5 @@
-#include "hal/adc_types.h"
-#include "esp32-hal-adc.h"
-#include "esp32-hal-gpio.h"
-#include <cstring>
-#include <stdint.h>
-#include "HardwareSerial.h"
 #include "Brutzelboy.h"
 #include <Adafruit_ILI9341.h>
-#include <Adafruit_GFX.h>
 #include <Audio.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -22,7 +15,7 @@
 */
 
 #define IMAGE_BUFFER_SIZE 1024
-#define SOUND_QUEUE_LENGTH 25
+#define SOUND_QUEUE_LENGTH 8
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(RG_GPIO_LCD_CS, RG_GPIO_LCD_DC, RG_GPIO_LCD_MOSI, RG_GPIO_LCD_CLK, RG_GPIO_LCD_RST, RG_GPIO_LCD_MISO);
 
@@ -31,20 +24,37 @@ char ssid[200];
 char pwd[200];
 
 Audio audio;
-bool soundIsPlaying = false;
 enum SoundType {tts, file, url};
 struct Sound {
   SoundType type;
-  char source[500];
+  char source[151];
   char language[2];
 };
 Sound soundQueue[SOUND_QUEUE_LENGTH];
-uint8_t soundPlayed = -1;
-uint8_t queuePointer = -1;
+uint8_t soundPlayed = 255;
+uint8_t queuePointer = 255;
+bool soundIsPlaying = false;
 
+TaskHandle_t TaskSound;
+
+uint16_t upCount = 0;
+uint16_t downCount = 0;
+uint16_t leftCount = 0;
+uint16_t rightCount = 0;
+uint16_t trigger = 300;
+uint16_t topBorder = 1800;
+uint16_t bottomBorder = 1000;
 
 // Dummy function, if handler are not used
 void doNothing(const uint8_t event, const uint16_t value) {}
+
+void taskPlaySound(void * pvParameters) {
+  Brutzelboy *boy = (Brutzelboy *) pvParameters;
+  while(true) {
+    boy->playQueuedSound();
+    delay(100);
+  }
+}
 
 Brutzelboy::Brutzelboy() {
   keyEventHandler = doNothing;
@@ -59,18 +69,32 @@ void Brutzelboy::begin() {
   pinMode(RG_GPIO_KEY_A,      INPUT_PULLUP);
   pinMode(RG_GPIO_KEY_B,      INPUT_PULLUP);
   pinMode(RG_GPIO_KEY_BOOT,   INPUT_PULLUP);
+  pinMode(RG_GPIO_LED,        OUTPUT);
+  pinMode(RG_GPIO_LCD_BCKL,   OUTPUT);
 
   initDisplay();
   initSPIFFS();
   initAudio();
   initSDCard();
   initWiFi();
+  
+  //create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
+  xTaskCreatePinnedToCore(
+                    taskPlaySound,   // Task function
+                    "TaskSound",    // name of task
+                    10000,          // Stack size of task
+                    (void *) this,  // parameter of the task
+                    1,              // priority of the task
+                    &TaskSound,     // Task handle to keep track of created task
+                    0);             // pin task to core 1 
+                      
 }
 
 void Brutzelboy::initDisplay() {
   tft.begin();
   tft.setRotation(3);
   tft.fillScreen(ILI9341_BLACK);
+  setLcd(true);
 }
 
 void Brutzelboy::initWiFi() {
@@ -108,15 +132,17 @@ void Brutzelboy::initSDCard() {
   }
 }
 
+
+/**
+ * SOUND FUNCTION
+ **/
 void Brutzelboy::playTTS(const char* text, const char* language) {
   if (!soundIsPlaying) {
     soundIsPlaying = true;
-    char buf[500];
-    strcpy(buf, text);
-    Serial.printf("talk: '%s'\n", buf);
+    char buf[150];
+    strncpy(buf, text, 150);
+    Serial.printf("talk(%d:%d): '%s'\n", soundPlayed % SOUND_QUEUE_LENGTH, queuePointer % SOUND_QUEUE_LENGTH, buf);
     audio.connecttospeech(buf, language);
-  } else {
-    Serial.printf("Skip '%s'\n", text);
   }
 }
 
@@ -136,64 +162,52 @@ void Brutzelboy::playFile(const char* path) {
 
 void Brutzelboy::addTTSSoundToQueue(const char* source, const char* language) {
   queuePointer++;
-  if (queuePointer >= SOUND_QUEUE_LENGTH) {
-    queuePointer = 0;
-  }
-  if (soundPlayed == queuePointer) {
-    Serial.printf("Skip '%s'\n", source);
+  if (soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
     queuePointer--;
+    Serial.printf("Skip(%d:%d): '%s'\n", soundPlayed % SOUND_QUEUE_LENGTH, queuePointer % SOUND_QUEUE_LENGTH, source);
     return;
   }
-  Sound current = soundQueue[queuePointer];
+  Sound current = soundQueue[queuePointer % SOUND_QUEUE_LENGTH];
   current.type = tts;
-  strcpy(current.source, source);
-  strcpy(current.language, language);
-  soundQueue[queuePointer] = current;
+  strncpy(current.source, source, 150);
+  strncpy(current.language, language, 2);
+  soundQueue[queuePointer % SOUND_QUEUE_LENGTH] = current;
 }
 
 void Brutzelboy::addFileSoundToQueue(const char* source) {
   queuePointer++;
-  if (queuePointer >= SOUND_QUEUE_LENGTH) {
-    queuePointer = 0;
-  }
-  if (soundPlayed == queuePointer) {
+  if (soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
     Serial.printf("Skip '%s'\n", source);
     queuePointer--;
     return;
   }
 
-  Sound current = soundQueue[queuePointer];
+  Sound current = soundQueue[queuePointer % SOUND_QUEUE_LENGTH];
   current.type = file;
   strcpy(current.source, source);
-  soundQueue[queuePointer] = current;
+  soundQueue[queuePointer % SOUND_QUEUE_LENGTH] = current;
 }
 
 void Brutzelboy::addUrlSoundToQueue(const char* source) {
   queuePointer++;
-  if (queuePointer >= SOUND_QUEUE_LENGTH) {
-    queuePointer = 0;
-  }
-  if (soundPlayed == queuePointer) {
+  if (soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
     Serial.printf("Skip '%s'\n", source);
     queuePointer--;
     return;
   }
 
-  Sound current = soundQueue[queuePointer];
+  Sound current = soundQueue[queuePointer % SOUND_QUEUE_LENGTH];
   current.type = url;
   strcpy(current.source, source);
-  soundQueue[queuePointer] = current;
+  soundQueue[queuePointer % SOUND_QUEUE_LENGTH] = current;
 }
 
 void Brutzelboy::playQueuedSound() {
-  if (soundIsPlaying || soundPlayed == queuePointer) {
+  if (soundIsPlaying || soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
     return;
   }
   soundPlayed++;
-  if (soundPlayed >= SOUND_QUEUE_LENGTH) {
-    soundPlayed = 0;
-  }
-  Sound current = soundQueue[soundPlayed];
+  Sound current = soundQueue[soundPlayed % SOUND_QUEUE_LENGTH];
 
   switch(current.type){
     case tts:
@@ -226,6 +240,19 @@ void audio_info(const char *info){
 }
 
 
+/**
+ * DISPLAY FUNCTION
+ **/
+GFXcanvas16* Brutzelboy::createCanvas(uint16_t x, uint16_t y) {
+  GFXcanvas16* canvas = new GFXcanvas16(x, y);
+  return canvas;
+} 
+
+void Brutzelboy::printAt(GFXcanvas16* canvas, uint16_t x, uint16_t y, char* charStr) {
+  canvas->setCursor(x, y);
+  canvas->println(charStr);
+}
+
 void Brutzelboy::printDirectAt(uint16_t x, uint16_t y, char* charStr) {
   tft.setCursor(x, y);
   tft.println(charStr);
@@ -239,30 +266,98 @@ void Brutzelboy::clearLCD() {
   tft.fillScreen(ILI9341_BLACK);
 }
 
-void Brutzelboy::drawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled) {
+void Brutzelboy::drawRect(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled) {
   if (filled) {
-    tft.fillRect(x, y, w, h, ILI9341_BLACK);
+    canvas->fillRect(x, y, w, h, ILI9341_BLACK);
   } else {
-    tft.drawRect(x, y, w, h, ILI9341_WHITE);
+    canvas->drawRect(x, y, w, h, ILI9341_WHITE);
   }
 }
 
-void Brutzelboy::loop() {
-  if (!soundIsPlaying) {
-    playQueuedSound();
-  }
-  audio.loop();
-  checkKeys();
+void Brutzelboy::refreshDisplay(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+  tft.drawRGBBitmap(x, y, canvas->getBuffer(), w, h);
 }
 
-uint16_t upCount = 0;
-uint16_t downCount = 0;
-uint16_t leftCount = 0;
-uint16_t rightCount = 0;
-uint16_t trigger = 300;
-uint16_t topBorder = 1800;
-uint16_t bottomBorder = 1000;
+bool Brutzelboy::displayImageFromURL(const char* url) {
+  HTTPClient http;
+  Serial.printf("Loading image from %s\n", url);
+  http.begin(url);
+  int httpCode = http.GET();
 
+  if (httpCode == HTTP_CODE_OK) {
+    // Lade JPEG-Daten in einen Puffer
+    WiFiClient* stream = http.getStreamPtr();
+    uint8_t buffer[IMAGE_BUFFER_SIZE];
+    size_t totalBytes = 0;
+
+    // Lade alle Daten in einen dynamischen Speicherbereich
+    uint8_t* jpgData = nullptr; // Dynamischer Puffer
+    size_t jpgSize = 0;
+
+    while (stream->connected() || stream->available()) {
+      size_t bytesRead = stream->readBytes(buffer, sizeof(buffer));
+      if (bytesRead == 0) {
+        break;
+      }
+      if (bytesRead > 0) {
+        // Speicher erweitern und Daten anh�ngen
+        uint8_t* newPtr = (uint8_t*)realloc(jpgData, jpgSize + bytesRead);
+        if (newPtr) {
+          jpgData = newPtr;
+          memcpy(jpgData + jpgSize, buffer, bytesRead);
+          jpgSize += bytesRead;
+        } else {
+          Serial.println("Speicherproblem!");
+          free(jpgData);
+          http.end();
+          return false;
+        }
+      }
+    }
+    http.end();
+
+    // JPEG-Daten dekodieren und anzeigen
+    if (JpegDec.decodeArray(jpgData, jpgSize)) {
+      renderJPEG();
+      free(jpgData); // Speicher freigeben
+      return true;
+    } else {
+      Serial.println("Fehler: Konnte JPEG nicht dekodieren.");
+      free(jpgData); // Speicher freigeben
+    }
+  } else {
+    Serial.printf("HTTP-Fehler: %d\n", httpCode);
+  }
+
+  http.end();
+  return false;
+}
+
+// Funktion zum Rendern des dekodierten JPEG
+void Brutzelboy::renderJPEG() {
+  int16_t mcuX = 0, mcuY = 0;
+
+  while (JpegDec.read()) {
+    int16_t x = JpegDec.MCUx * JpegDec.MCUWidth;
+    int16_t y = JpegDec.MCUy * JpegDec.MCUHeight;
+    uint16_t mcuWidth = JpegDec.MCUWidth;
+    uint16_t mcuHeight = JpegDec.MCUHeight;
+
+    if ((x + mcuWidth) > JpegDec.width) {
+      mcuWidth = JpegDec.width - x;
+    }
+    if ((y + mcuHeight) > JpegDec.height) {
+      mcuHeight = JpegDec.height - y;
+    }
+
+    tft.drawRGBBitmap(x, y, JpegDec.pImage, mcuWidth, mcuHeight);
+  }
+}
+
+
+/**
+ * KEY FUNCTIONS
+ **/
 void Brutzelboy::checkKeys() {
   // Analog Keys
   uint16_t updown = analogRead(RG_ADC_UP_DOWN);
@@ -338,6 +433,14 @@ void Brutzelboy::processKey(uint16_t key, bool pressed) {
   }
 }
 
+bool Brutzelboy::isKeyPressed(const uint16_t key) {
+  return keys & key;
+}
+
+
+/**
+ * LED
+ **/
 void Brutzelboy::setLed(boolean on) {
   if (on) {
     digitalWrite(RG_GPIO_LED, HIGH);
@@ -347,82 +450,30 @@ void Brutzelboy::setLed(boolean on) {
 }
 
 
-bool Brutzelboy::displayImageFromURL(const char* url) {
-  HTTPClient http;
-  Serial.printf("Loading image from %s\n", url);
-  http.begin(url);
-  int httpCode = http.GET();
-
-  if (httpCode == HTTP_CODE_OK) {
-    // Lade JPEG-Daten in einen Puffer
-    WiFiClient* stream = http.getStreamPtr();
-    uint8_t buffer[IMAGE_BUFFER_SIZE];
-    size_t totalBytes = 0;
-
-    // Lade alle Daten in einen dynamischen Speicherbereich
-    uint8_t* jpgData = nullptr; // Dynamischer Puffer
-    size_t jpgSize = 0;
-
-    while (stream->connected() || stream->available()) {
-      size_t bytesRead = stream->readBytes(buffer, sizeof(buffer));
-      if (bytesRead == 0) {
-        break;
-      }
-      if (bytesRead > 0) {
-        // Speicher erweitern und Daten anhängen
-        uint8_t* newPtr = (uint8_t*)realloc(jpgData, jpgSize + bytesRead);
-        if (newPtr) {
-          jpgData = newPtr;
-          memcpy(jpgData + jpgSize, buffer, bytesRead);
-          jpgSize += bytesRead;
-        } else {
-          Serial.println("Speicherproblem!");
-          free(jpgData);
-          http.end();
-          return false;
-        }
-      }
-    }
-    http.end();
-
-    // JPEG-Daten dekodieren und anzeigen
-    if (JpegDec.decodeArray(jpgData, jpgSize)) {
-      renderJPEG();
-      free(jpgData); // Speicher freigeben
-      return true;
-    } else {
-      Serial.println("Fehler: Konnte JPEG nicht dekodieren.");
-      free(jpgData); // Speicher freigeben
-    }
+/**
+ * LCD
+ **/
+void Brutzelboy::setLcd(boolean on) {
+  if (on) {
+    digitalWrite(RG_GPIO_LCD_BCKL, HIGH);
   } else {
-    Serial.printf("HTTP-Fehler: %d\n", httpCode);
-  }
-
-  http.end();
-  return false;
-}
-
-// Funktion zum Rendern des dekodierten JPEG
-void Brutzelboy::renderJPEG() {
-  int16_t mcuX = 0, mcuY = 0;
-
-  while (JpegDec.read()) {
-    int16_t x = JpegDec.MCUx * JpegDec.MCUWidth;
-    int16_t y = JpegDec.MCUy * JpegDec.MCUHeight;
-    uint16_t mcuWidth = JpegDec.MCUWidth;
-    uint16_t mcuHeight = JpegDec.MCUHeight;
-
-    if ((x + mcuWidth) > JpegDec.width) {
-      mcuWidth = JpegDec.width - x;
-    }
-    if ((y + mcuHeight) > JpegDec.height) {
-      mcuHeight = JpegDec.height - y;
-    }
-
-    tft.drawRGBBitmap(x, y, JpegDec.pImage, mcuWidth, mcuHeight);
+    digitalWrite(RG_GPIO_LCD_BCKL, LOW);
   }
 }
 
+
+/**
+ * LOOP
+ **/
+void Brutzelboy::loop() {
+  audio.loop();
+  checkKeys();
+}
+
+
+/**
+ * READ CONFIG
+ **/
 void parseValue(const char* s) {
   uint8_t pos[4];
   uint8_t index = 0;
@@ -487,8 +538,4 @@ void Brutzelboy::readWifiConfig() {
     }
   }
   file.close();
-}
-
-bool Brutzelboy::isKeyPressed(const uint16_t key) {
-  return keys & key;
 }

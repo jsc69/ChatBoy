@@ -12,15 +12,18 @@
 #define FONT_HEIGHT 10
 
 // Name des Channels in Kleinbuchstaben - z.B. "thebrutzler"
-const String twitchChannelName = "kekluck";
+const String twitchChannelName = "thebrutzler";
 const String urlThumbnail  = "https://static-cdn.jtvnw.net/previews-ttv/live_user_" + twitchChannelName + "-288x162.jpg";
 
 WiFiClient wifiClient;
 IRCClient client(IRC_SERVER, IRC_PORT, wifiClient);
 
 Brutzelboy boy;
+GFXcanvas16* canvas;
 
 char textBuffer[MAX_ROWS][MAX_COLS+1];
+String message;
+
 uint8_t currentRow = 0;
 
 // Timer für das LAden des Thumbnail
@@ -34,7 +37,7 @@ uint16_t flash = 0;
 int8_t volume = 16;
 
 void onKeyEvent(const uint8_t event, const uint16_t value) {
-  if (event == EVENT_KEY_UP) {
+  if (event == EVENT_KEY_DOWN) {
     if (value == KEY_OPTION || value == KEY_UP || value == KEY_RIGHT) {
       if (volume < 21) {
         boy.setVolume(++volume);
@@ -56,15 +59,27 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Welcome to ChatBoy");
 
-  initTextBuffer();
-
   boy.begin();
 
   client.setCallback(callback);
   boy.printDirectAt(5, 10, "Waiting for thumbnail");
 
   boy.setKeyEventHandler(onKeyEvent);
+  /*
+  //create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
+  xTaskCreatePinnedToCore(
+                    taskTextFunction,// Task function.
+                    "TaskText",  // name of task. 
+                    10000,       // Stack size of task
+                    (void *) &boy,        // parameter of the task
+                    1,           // priority of the task 
+                    &TaskText,   // Task handle to keep track of created task 
+                    1);          // pin task to core
+*/                    
+  canvas = boy.createCanvas(288, 78);
 }
+
+
 
 void loop() {
   client.loop();
@@ -116,12 +131,13 @@ void sendTwitchMessage(String message) {
 
 void callback(IRCMessage ircMessage) {
   if (ircMessage.command == "PRIVMSG" && ircMessage.text[0] != '\001') {
-    String talk(ircMessage.nick + " schreibt " + ircMessage.text);
+    String talk("\""+ircMessage.text + "\", schrieb " + ircMessage.nick);
     if (talk.indexOf("!tts") >= 0) {
-      talk = String(ircMessage.nick + " sagt " + ircMessage.text);
+      talk = String("\""+ircMessage.text + "\", sagte " + ircMessage.nick);
       talk.replace("!tts", "");
     }
     talk.replace("_", " ");
+    talk.replace("^", " ");
     boy.addTTSSoundToQueue(talk.c_str(), "de");
     
     if (talk.equals("!ttscn ^") || talk.indexOf("jensefu") >= 0) {
@@ -132,20 +148,30 @@ void callback(IRCMessage ircMessage) {
     }
     
     ircMessage.nick.toUpperCase();
-    String message("<" + ircMessage.nick + "> " + ircMessage.text);
-    //Serial.println(message);
+    message = "<" + ircMessage.nick + "> " + ircMessage.text;
     printText(message.c_str());
+    //Serial.println(message);
   } else {
     //Serial.println("-->" + ircMessage.command);
   }
 }
 
-void initTextBuffer() {
-  for (int i=0; i<MAX_ROWS; i++) {
-    memset(textBuffer[i], ' ', MAX_COLS);
-    textBuffer[i][MAX_COLS] = '\0';
+boolean refresh = false;
+/*
+void taskTextFunction(void * pvParameters) {
+  Brutzelboy *boy = (Brutzelboy*) pvParameters;
+  while(true) {
+    if (refresh) {
+      refresh = false;
+      boy->drawRect(0, 162, RG_LCD_WIDTH, RG_LCD_HEIGHT, true);
+      for (int i=0; i<MAX_ROWS; i++) {
+        boy->printDirectAt(5, i*FONT_HEIGHT + 162, textBuffer[i]);
+      }
+      yield();
+    }
   }
 }
+*/
 
 void printText(const char* text) {
   uint8_t x=0;
@@ -167,10 +193,13 @@ void printText(const char* text) {
   }
   currentRow++;
   
-  boy.drawRect(0, 162, RG_LCD_WIDTH, RG_LCD_HEIGHT, true);
+  yield();
+  refresh=true;
+  boy.drawRect(canvas, 0, 0, 288, 78, true);
   for (int i=0; i<MAX_ROWS; i++) {
-    boy.printDirectAt(5, i*FONT_HEIGHT + 162, textBuffer[i]);
+    boy.printAt(canvas, 5, i*FONT_HEIGHT, textBuffer[i]);
   }
+  boy.refreshDisplay(canvas, 0, 162, 288, 78);
 }
 
 void scrollText() {

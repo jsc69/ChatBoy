@@ -1,5 +1,6 @@
 #pragma once
 #include <WiFiClient.h>
+#include <Adafruit_GFX.h>
 #include <FS.h>
 
 #define RG_LCD_WIDTH 288
@@ -83,6 +84,7 @@
 #define EVENT_SOUND_START 1
 #define EVENT_SOUND_STOP  2
 
+
 class Brutzelboy {
 private:
   void initDisplay();
@@ -91,8 +93,6 @@ private:
   void initSPIFFS();
   void initSDCard();
   void readWifiConfig();
-
-  void playQueuedSound();
 
   uint16_t keys;
   void checkKeys();
@@ -108,12 +108,17 @@ public:
   void initWiFi();
 
   void setLed(boolean on);
+  void setLcd(boolean on);
   
+  GFXcanvas16* createCanvas(uint16_t x, uint16_t y);
+  void printAt(GFXcanvas16* canvas, uint16_t x, uint16_t y, char* charStr);
   void printDirectAt(uint16_t x, uint16_t y, char* charStr);
   void setTextColor(uint8_t r, uint8_t g, uint8_t b);
   void clearLCD();
-  void drawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled);
+  void clearCanvas();
+  void drawRect(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled);
   bool displayImageFromURL(const char* url);
+  void refreshDisplay(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
   void addTTSSoundToQueue(const char* source, const char* language);
   void addFileSoundToQueue(const char* source);
@@ -122,6 +127,7 @@ public:
   void playURL(const char* url);
   void playFile(const char* path);
   void setVolume(int volume);
+  void playQueuedSound();
 
   bool isKeyPressed(const uint16_t key);
 

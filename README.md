@@ -4,10 +4,13 @@ Twitch chat client for theButzler's ESP32 GBC Retrofit [see](https://github.com/
 # Work in progress
 Open points:
 * faster LCD with double buffering - other library?
+* Multithreading / multicore
 * why is TTS limited?
+* select channel (ChatBoy)
+* read cartridge slot
 * IR Leds
 * Clean up ;)
-* transform into a library
+* transform into a library, add examples
 * handle error when SD Card could not be found
 * handle PSRAM error
 

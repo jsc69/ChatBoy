@@ -15,7 +15,7 @@
 */
 
 #define IMAGE_BUFFER_SIZE 1024
-#define SOUND_QUEUE_LENGTH 8
+#define SOUND_QUEUE_LENGTH 16
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(RG_GPIO_LCD_CS, RG_GPIO_LCD_DC, RG_GPIO_LCD_MOSI, RG_GPIO_LCD_CLK, RG_GPIO_LCD_RST, RG_GPIO_LCD_MISO);
 
@@ -43,7 +43,8 @@ uint16_t leftCount = 0;
 uint16_t rightCount = 0;
 uint16_t trigger = 300;
 uint16_t topBorder = 1800;
-uint16_t bottomBorder = 1000;
+uint16_t middleBorder = 1400;
+uint16_t bottomBorder = 800;
 
 // Dummy function, if handler are not used
 void doNothing(const uint8_t event, const uint16_t value) {}
@@ -366,7 +367,7 @@ void Brutzelboy::checkKeys() {
   if (updown > topBorder) {
     if (upCount <= trigger) upCount++;
     downCount = 0;
-  } else if (updown > bottomBorder) {
+  } else if (updown < middleBorder && updown > bottomBorder) {
     if (upCount <= trigger) downCount++;
     upCount = 0;
   } else {
@@ -376,7 +377,7 @@ void Brutzelboy::checkKeys() {
   if (leftright > topBorder) {
     if (upCount <= trigger) leftCount++;
     rightCount = 0;
-  } else if (leftright > bottomBorder) {
+  } else if (leftright < middleBorder && leftright > bottomBorder) {
     if (upCount <= trigger) rightCount++;
     leftCount = 0;
   } else {

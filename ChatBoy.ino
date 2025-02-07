@@ -14,6 +14,7 @@
 // Name des Channels in Kleinbuchstaben - z.B. "thebrutzler"
 const String twitchChannelName = "thebrutzler";
 const String urlThumbnail  = "https://static-cdn.jtvnw.net/previews-ttv/live_user_" + twitchChannelName + "-288x162.jpg";
+uint32_t botNumber;
 
 WiFiClient wifiClient;
 IRCClient client(IRC_SERVER, IRC_PORT, wifiClient);
@@ -52,6 +53,7 @@ void onKeyEvent(const uint8_t event, const uint16_t value) {
 
     if (value == KEY_A) boy.setLcd(true);
     if (value == KEY_B) boy.setLcd(false);
+    if (value == KEY_START) flash=10000;
   }
 }
 
@@ -77,6 +79,9 @@ void setup() {
                     1);          // pin task to core
 */                    
   canvas = boy.createCanvas(288, 78);
+
+  uint64_t chipId = ESP.getEfuseMac();
+  botNumber = chipId % 90000 + 10000;
 }
 
 
@@ -110,7 +115,7 @@ void loop() {
 void connectToTwitch() {
   Serial.println("Attempting to connect to " + twitchChannelName );
   char botname[50];
-  sprintf(botname, "%s%d", BOT_NAME_PREFIX, random(90000)+10000);
+  sprintf(botname, "%s%d", BOT_NAME_PREFIX, botNumber);
   if (client.connect(botname, "", TWITCH_OAUTH_TOKEN)) {
     Serial.printf("sending JOIN as %s...\n", botname);
     char message[100];

@@ -13,7 +13,7 @@
 #define FONT_HEIGHT 10
 
 // Name des Channels in Kleinbuchstaben - z.B. "thebrutzler"
-const String twitchChannelName = "schobi";
+const String twitchChannelName = "thebrutzler";
 const String urlThumbnail  = "https://static-cdn.jtvnw.net/previews-ttv/live_user_" + twitchChannelName + "-288x162.jpg";
 uint32_t botNumber;
 
@@ -139,8 +139,8 @@ void callback(IRCMessage ircMessage) {
       talk = String("\""+ircMessage.text + "\", sagte " + ircMessage.nick);
       talk.replace("!tts", "");
     }
-    talk.replace("_", " ");
-    talk.replace("^", " ");
+    talk.replace("_", "");
+    talk.replace("^", "");
     boy.addTtsSoundToQueue(talk.c_str(), "de");
     
     if (talk.equals("!ttscn ^") || talk.indexOf("jensefu") >= 0) {

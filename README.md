@@ -4,6 +4,7 @@ Twitch chat client for theButzler's ESP32 GBC Retrofit [see](https://github.com/
 # Work in progress
 Open points:
 * add support double buffering for lcd
+* add german umlauts
 * Multithreading / multicore
 * why is TTS limited?
 * select channel (ChatBoy)

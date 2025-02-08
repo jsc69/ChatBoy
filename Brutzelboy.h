@@ -1,7 +1,5 @@
 #pragma once
-#include <WiFiClient.h>
-#include <Adafruit_GFX.h>
-#include <FS.h>
+#include <cstdint>
 
 #define RG_LCD_WIDTH 288
 #define RG_LCD_HEIGHT 240
@@ -76,6 +74,15 @@
 #define KEY_B       512
 #define KEY_BOOT    1024
 
+// Hardware Flags
+#define INIT_LCD          1
+#define INIT_BUTTONS      2
+#define INIT_SD_CARD      4
+#define INIT_WIFI         8
+#define INIT_AUDIO        16
+#define INIT_CARTRIDGE    32
+#define INIT_INFRARED     64
+
 // Key events
 #define EVENT_KEY_DOWN    1
 #define EVENT_KEY_UP      2
@@ -88,11 +95,18 @@
 class Brutzelboy {
 private:
   void initDisplay();
-  void renderJPEG();
   void initAudio();
   void initSPIFFS();
   void initSDCard();
   void readWifiConfig();
+  void initWiFi();
+  void initCartridge();
+  void initInfrared();
+
+  uint8_t hardwareSupport = 0;
+  bool isHardwareSupported(const uint8_t hardware) {
+     return hardwareSupport & hardware;
+  }
 
   uint16_t keys;
   void checkKeys();
@@ -101,38 +115,144 @@ private:
   void (*keyEventHandler)(const uint8_t event, const uint16_t value);
   void (*soundEventHandler)(const uint8_t event, const uint16_t value);
 
+  uint16_t backgroundColor;
+  void renderJpeg(const uint16_t x, uint16_t y);
+
+  void parseCredentialValues(const char* s);
+  char ssid[200];
+  char pwd[200];
+
 public:
+  /**
+   * @brief Constuctor for a Brutzelboy instance with chosen hardware support.
+   * @param uint8_t Flgs of hardware that should be supported. See Hardware Flags (#define INIT_xxx)
+   */
+  Brutzelboy(uint8_t hardware);
+  /**
+   * @brief Constuctor for a Brutzelboy instance with complete hardware supprt.
+   */
   Brutzelboy();
+
+  /**
+   * @brief Init the Brutzelboy with wifi credentials from SDCard. Should be called in setup()
+   */
   void begin();
+  /**
+   * @brief Init the Brutzelboy with given wifi credentials. Should be called in setup()
+   */
+  void begin(const char* ssid, const char* pwd);
+  /**
+   * @brief Loop for the Brutzelboy.Should call frequently to allow the Brutzelboy doing its thing. Call it in loop()
+   */
   void loop();
-  void initWiFi();
 
-  void setLed(boolean on);
-  void setLcd(boolean on);
+  /**
+   * @brief Set the green led on the left side of the display
+   * @param bool
+   */
+  void setLed(const bool on);
+  /**
+   * @brief Set the background light of the display
+   * @param bool
+   */
+  void setLcd(const bool on);
   
-  GFXcanvas16* createCanvas(uint16_t x, uint16_t y);
-  void printAt(GFXcanvas16* canvas, uint16_t x, uint16_t y, char* charStr);
-  void printDirectAt(uint16_t x, uint16_t y, char* charStr);
-  void setTextColor(uint8_t r, uint8_t g, uint8_t b);
-  void clearLCD();
-  void clearCanvas();
-  void drawRect(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled);
-  bool displayImageFromURL(const char* url);
-  void refreshDisplay(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+  /**
+   * @brief Print text on the given position
+   * @param uint16_t x position
+   * @param uint16_t y position
+   * @param char* text
+   */
+  void printAt(const uint16_t x, const uint16_t y, const char* charStr);
+  /**
+   * @brief Set the drawing color in RGB. Default: write
+   * @param uint8_t red
+   * @param uint8_t green
+   * @param uint8_t blue
+   */
+  void setColor(const uint8_t r, const uint8_t g, const uint8_t b);
+  /**
+   * @brief Set the background color in RGB. Default: black
+   * @param uint8_t red
+   * @param uint8_t green
+   * @param uint8_t blue
+   */
+  void setBackgroundColor(const uint8_t r, const uint8_t g, const uint8_t b);
+  /**
+   * @brief Clear the display by filling it in the background color
+   */
+  void clearDisplay();
+  /**
+   * @brief Draw a jpeg image loaded from web at given position
+   * @param uint16_t left edge of refresh area (framebuffer and display)
+   * @param uint16_t top edge of refresh area (framebuffer and display)
+   * @param char* url of jpeg
+   * @return bool true, if image could be loaded and displayed successfully
+   */
+  bool displayImageFromUrl(const uint16_t x, const uint16_t y, const char* url);
+  /**
+   * @brief Clear the framebuffer by filling it in the background color
+   */
+  void clearFramebuffer();
 
-  void addTTSSoundToQueue(const char* source, const char* language);
+  /**
+   * @brief Add a text in queue to be play via TTS
+   * @param char* text to be play
+   * @param char* language to use in TTS
+   */
+  void addTtsSoundToQueue(const char* source, const char* language);
+  /**
+   * @brief Add a sound file from SDCard in queue to be played
+   * @param char* filename incl. absolute path
+   */
   void addFileSoundToQueue(const char* source);
+  /**
+   * @brief Add a sound file from web in queue to be played
+   * @param char* url of sound file
+   */
   void addUrlSoundToQueue(const char* source);
-  void playTTS(const char* text, const char* language);
-  void playURL(const char* url);
+  /**
+   * @brief Play text directly via TTS
+   * @param char* text to play
+   * @param char* language to use in TTS
+   */
+  void playTts(const char* text, const char* language);
+  /**
+   * @brief Play sound file from web directly
+   * @param char* url of sound file
+   */
+  void playUrl(const char* url);
+  /**
+   * @brief Play sound file from SDCard directly
+   * @param char* filename incl. absolute path
+   */
   void playFile(const char* path);
-  void setVolume(int volume);
+  /**
+   * @brief Set the volume (0-21)
+   * @param uint8_t new volume
+   */
+  void setVolume(uint8_t volume);
+  /**
+   * @brief Start playing next sound from queue if no sound is playing
+   */
   void playQueuedSound();
 
-  bool isKeyPressed(const uint16_t key);
-
+  /**
+   * @brief Check if a button is pressed
+   * @param uint16_t id of button
+   * @return true if pressed
+   */
+  bool isButtonPressed(const uint16_t key);
+  /**
+   * @brief Add handler for button event
+   * @param void (*userDefinedEventHandler) function to handle button events
+   */
   void setKeyEventHandler(void (*userDefinedEventHandler)(const uint8_t event, const uint16_t value)) {
     keyEventHandler = userDefinedEventHandler; }
+  /**
+   * @brief Add handler for sound event
+   * @param void (*userDefinedEventHandler) function to handle sound events
+   */
   void setSoundEventHandler(void (*userDefinedEventHandler)(const uint8_t event, const uint16_t value)) {
     soundEventHandler = userDefinedEventHandler; }
 

@@ -1,15 +1,13 @@
 #include "Brutzelboy.h"
-#include <Adafruit_ILI9341.h>
 #include <Audio.h>
-#include <WiFi.h>
 #include <HTTPClient.h>
-#include <SPIFFS.h>
 #include <JPEGDecoder.h>
+#include <lcdgfx.h>
+#include <lcdgfx_gui.h>
 
 /**
   used library
-  - Adafruit ILI9341 by Adafruit
-  - Adafruit GFX Library by Adafruit (incl. Adafruit BusIO)
+  - lcdgfx by Alexey Dynda
   - ESP32-audioI2S-master by schreibfaul1
   - JPEGDecoder by Bodmer
 */
@@ -17,11 +15,10 @@
 #define IMAGE_BUFFER_SIZE 1024
 #define SOUND_QUEUE_LENGTH 16
 
-Adafruit_ILI9341 tft = Adafruit_ILI9341(RG_GPIO_LCD_CS, RG_GPIO_LCD_DC, RG_GPIO_LCD_MOSI, RG_GPIO_LCD_CLK, RG_GPIO_LCD_RST, RG_GPIO_LCD_MISO);
+// The parameters are  RST pin, BUS number, CS pin, DC pin, FREQ (0 means default), CLK pin, MOSI pin
+DisplayILI9341_240x320x16_SPI tft(RG_GPIO_LCD_RST,{-1, RG_GPIO_LCD_CS, RG_GPIO_LCD_DC, 0, RG_GPIO_LCD_CLK, RG_GPIO_LCD_MOSI});
 
 const String wifiConfig = "/retro-go/config/wifi.json";
-char ssid[200];
-char pwd[200];
 
 Audio audio;
 enum SoundType {tts, file, url};
@@ -42,11 +39,14 @@ uint16_t downCount = 0;
 uint16_t leftCount = 0;
 uint16_t rightCount = 0;
 uint16_t trigger = 300;
-uint16_t topBorder = 1800;
-uint16_t middleBorder = 1400;
-uint16_t bottomBorder = 800;
+uint16_t topBorder = 1600;
+uint16_t middleBorder = 1500;
+uint16_t bottomBorder = 900;
 
-// Dummy function, if handler are not used
+
+SPIClass spi = SPIClass();
+
+// Dummy function, if handlers are not used
 void doNothing(const uint8_t event, const uint16_t value) {}
 
 void taskPlaySound(void * pvParameters) {
@@ -60,48 +60,94 @@ void taskPlaySound(void * pvParameters) {
 Brutzelboy::Brutzelboy() {
   keyEventHandler = doNothing;
   soundEventHandler = doNothing;
+  hardwareSupport = 255;
+}
+
+Brutzelboy::Brutzelboy(uint8_t hardware) {
+  keyEventHandler = doNothing;
+  soundEventHandler = doNothing;
+  hardwareSupport = hardware;
+}
+
+void Brutzelboy::begin(const char* ssid, const char* pwd) {
+  strcpy(this->ssid, ssid);
+  strcpy(this->pwd, pwd);
+  begin();
 }
 
 void Brutzelboy::begin() {
-  pinMode(RG_GPIO_KEY_SELECT, INPUT_PULLUP);
-  pinMode(RG_GPIO_KEY_START,  INPUT_PULLUP);
-  pinMode(RG_GPIO_KEY_MENU,   INPUT_PULLUP);
-  pinMode(RG_GPIO_KEY_OPTION, INPUT_PULLUP);
-  pinMode(RG_GPIO_KEY_A,      INPUT_PULLUP);
-  pinMode(RG_GPIO_KEY_B,      INPUT_PULLUP);
-  pinMode(RG_GPIO_KEY_BOOT,   INPUT_PULLUP);
+  if (hardwareSupport & INIT_BUTTONS) {
+    pinMode(RG_GPIO_KEY_SELECT, INPUT_PULLUP);
+    pinMode(RG_GPIO_KEY_START,  INPUT_PULLUP);
+    pinMode(RG_GPIO_KEY_MENU,   INPUT_PULLUP);
+    pinMode(RG_GPIO_KEY_OPTION, INPUT_PULLUP);
+    pinMode(RG_GPIO_KEY_A,      INPUT_PULLUP);
+    pinMode(RG_GPIO_KEY_B,      INPUT_PULLUP);
+    pinMode(RG_GPIO_KEY_BOOT,   INPUT_PULLUP);
+  }
   pinMode(RG_GPIO_LED,        OUTPUT);
   pinMode(RG_GPIO_LCD_BCKL,   OUTPUT);
 
-  initDisplay();
-  initSPIFFS();
-  initAudio();
-  initSDCard();
-  initWiFi();
-  
-  //create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
-  xTaskCreatePinnedToCore(
-                    taskPlaySound,   // Task function
+  if (hardwareSupport & INIT_LCD) {
+    initDisplay();
+  } else {
+    setLcd(false);
+  }
+  if (hardwareSupport & INIT_AUDIO) {
+    initAudio();
+    xTaskCreatePinnedToCore(
+                    taskPlaySound,  // Task function
                     "TaskSound",    // name of task
                     10000,          // Stack size of task
                     (void *) this,  // parameter of the task
                     1,              // priority of the task
                     &TaskSound,     // Task handle to keep track of created task
                     0);             // pin task to core 1 
-                      
+  }
+  if (hardwareSupport & INIT_SD_CARD) {
+    initSDCard();
+    initSPIFFS();
+  }
+  if (hardwareSupport & INIT_WIFI) {
+    initWiFi();
+  }
+  if (hardwareSupport & INIT_CARTRIDGE) {
+    initCartridge();
+  }
+  if (hardwareSupport & INIT_INFRARED) {
+    initInfrared();
+  }
+
+  Serial.println("Brutzelboy is ready with support for");
+  if (hardwareSupport & INIT_LCD)       Serial.println("\t* Display");
+  if (hardwareSupport & INIT_BUTTONS)   Serial.println("\t* Buttons");
+  if (hardwareSupport & INIT_SD_CARD)   Serial.println("\t* SD Card");
+  if (hardwareSupport & INIT_WIFI)      Serial.println("\t* Wifi");
+  if (hardwareSupport & INIT_AUDIO)     Serial.println("\t* Audio");
+  if (hardwareSupport & INIT_CARTRIDGE) Serial.println("\t* Cartridge");
+  if (hardwareSupport & INIT_INFRARED)  Serial.println("\t* IR Leds");
+  Serial.println();
 }
 
 void Brutzelboy::initDisplay() {
   tft.begin();
-  tft.setRotation(3);
-  tft.fillScreen(ILI9341_BLACK);
+  tft.getInterface().setRotation(1);
+  tft.setFixedFont(ssd1306xled_font6x8);
+  tft.setColor(RGB_COLOR16(255,255,255));
+  tft.fill(RGB_COLOR16(0,0,0));
   setLcd(true);
+  hardwareSupport |= INIT_LCD;
 }
 
 void Brutzelboy::initWiFi() {
-  readWifiConfig();
   if (strlen(ssid) == 0 || strlen(pwd) == 0) {
-    Serial.println("Error: WIFI could not established. No credentials found!");
+    readWifiConfig();
+  }
+  if (strlen(ssid) == 0 || strlen(pwd) == 0) {
+    Serial.println("ERROR: WIFI could not established. No credentials found!");
+    Serial.println("Check that file \"/retro-go/config/wifi.json\" exists on the SDCard and \"ssid0\" and \"password0\" are defined in this file!");
+    delay(2000);
+    hardwareSupport &= ~INIT_WIFI;
     return;
   }
   Serial.print("Verbinde mit WiFi");
@@ -111,33 +157,53 @@ void Brutzelboy::initWiFi() {
     Serial.print(".");
   }
   Serial.println(" Verbunden!");
+  hardwareSupport |= INIT_WIFI;
 }
 
 void Brutzelboy::initSPIFFS() {
-  if(!SPIFFS.begin(true)){
-    Serial.println("An Error has occurred while mounting SPIFFS");
+  if (!(hardwareSupport & INIT_SD_CARD)) {
     return;
+  }
+  while(!SPIFFS.begin(false)){
+    Serial.println("ERROR: error has occurred while mounting SPIFFS");
+    delay(2000);
   }
 }
 
 void Brutzelboy::initAudio() {
   audio.setPinout(RG_GPIO_SND_I2S_BCK, RG_GPIO_SND_I2S_WS, RG_GPIO_SND_I2S_DATA);
-  audio.setVolume(16); // 0...21
+  audio.setVolume(16);
 }
 
 void Brutzelboy::initSDCard() {
-  SPI.begin(RG_GPIO_SDSPI_CLK, RG_GPIO_SDSPI_MISO, RG_GPIO_SDSPI_MOSI, -1);
-  while (!SD.begin(RG_GPIO_SDSPI_CS)) {
-    Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
-    delay(1000);
+  spi.begin(RG_GPIO_SDSPI_CLK, RG_GPIO_SDSPI_MISO, RG_GPIO_SDSPI_MOSI, RG_GPIO_SDSPI_CS);
+  while(!SD.begin(RG_GPIO_SDSPI_CS, spi, 80000000)) {
+    Serial.println("ERROR: SD CARD FAILED, OR NOT PRESENT!");
+    hardwareSupport &= ~INIT_SD_CARD;
+    delay(2000);
   }
 }
 
+void Brutzelboy::initCartridge() {
+  // TO BE DONE!
+    Serial.println("Cartridge is not supported by now");
+    hardwareSupport &= ~INIT_CARTRIDGE;
+}
 
-/**
+void Brutzelboy::initInfrared() {
+  // TO BE DONE!
+    Serial.println("Infrared leds are not supported by now");
+    hardwareSupport &= ~INIT_INFRARED;
+}
+
+/************************************************************************
  * SOUND FUNCTION
- **/
-void Brutzelboy::playTTS(const char* text, const char* language) {
+ ************************************************************************/
+void Brutzelboy::playTts(const char* text, const char* language) {
+  if (!(hardwareSupport & INIT_AUDIO) || !(hardwareSupport & INIT_WIFI)) {
+    Serial.println("ERROR: Hardware does not support function \"playTTS\". Please check initialization of Brutzelboy.");
+    return;
+  }
   if (!soundIsPlaying) {
     soundIsPlaying = true;
     char buf[150];
@@ -147,7 +213,11 @@ void Brutzelboy::playTTS(const char* text, const char* language) {
   }
 }
 
-void Brutzelboy::playURL(const char* url) {
+void Brutzelboy::playUrl(const char* url) {
+  if (!(hardwareSupport & INIT_AUDIO) || !(hardwareSupport & INIT_WIFI)) {
+    Serial.println("ERROR: Hardware does not support function \"playURL\". Please check initialization of Brutzelboy.");
+    return;
+  }
   if (!soundIsPlaying) {
     soundIsPlaying = true;
     audio.connecttohost(url);
@@ -155,13 +225,21 @@ void Brutzelboy::playURL(const char* url) {
 }
 
 void Brutzelboy::playFile(const char* path) {
+  if (!(hardwareSupport & INIT_AUDIO) || !(hardwareSupport & INIT_SD_CARD)) {
+    Serial.println("ERROR: Hardware does not support function \"playFile\". Please check initialization of Brutzelboy.");
+    return;
+  }
   if (!soundIsPlaying) {
     soundIsPlaying = true;
     audio.connecttoFS(SD, path);
   }
 }
 
-void Brutzelboy::addTTSSoundToQueue(const char* source, const char* language) {
+void Brutzelboy::addTtsSoundToQueue(const char* source, const char* language) {
+  if (!(hardwareSupport & INIT_AUDIO) || !(hardwareSupport & INIT_WIFI)) {
+   Serial.println("ERROR: Hardware does not support function \"addTTSSoundToQueue\". Please check initialization of Brutzelboy.");
+   return;
+  }
   queuePointer++;
   if (soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
     queuePointer--;
@@ -176,10 +254,14 @@ void Brutzelboy::addTTSSoundToQueue(const char* source, const char* language) {
 }
 
 void Brutzelboy::addFileSoundToQueue(const char* source) {
+  if (!(hardwareSupport & INIT_AUDIO) || !(hardwareSupport & INIT_SD_CARD)) {
+    Serial.println("ERROR: Hardware does not support function \"addFileSoundToQueue\". Please check initialization of Brutzelboy.");
+    return;
+  }
   queuePointer++;
   if (soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
-    Serial.printf("Skip '%s'\n", source);
     queuePointer--;
+    Serial.printf("Skip(%d:%d): '%s'\n", soundPlayed % SOUND_QUEUE_LENGTH, queuePointer % SOUND_QUEUE_LENGTH, source);
     return;
   }
 
@@ -190,10 +272,14 @@ void Brutzelboy::addFileSoundToQueue(const char* source) {
 }
 
 void Brutzelboy::addUrlSoundToQueue(const char* source) {
+  if (!(hardwareSupport & INIT_AUDIO) || !(hardwareSupport & INIT_WIFI)) {
+    Serial.println("ERROR: Hardware does not support function \"addUrlSoundToQueue\". Please check initialization of Brutzelboy.");
+    return;
+  }
   queuePointer++;
   if (soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
-    Serial.printf("Skip '%s'\n", source);
     queuePointer--;
+    Serial.printf("Skip(%d:%d): '%s'\n", soundPlayed % SOUND_QUEUE_LENGTH, queuePointer % SOUND_QUEUE_LENGTH, source);
     return;
   }
 
@@ -204,6 +290,10 @@ void Brutzelboy::addUrlSoundToQueue(const char* source) {
 }
 
 void Brutzelboy::playQueuedSound() {
+  if (!(hardwareSupport & INIT_AUDIO)) {
+    Serial.println("ERROR: Hardware does not support function \"playQueuedSound\". Please check initialization of Brutzelboy.");
+    return;
+  }
   if (soundIsPlaying || soundPlayed % SOUND_QUEUE_LENGTH == queuePointer % SOUND_QUEUE_LENGTH) {
     return;
   }
@@ -212,18 +302,22 @@ void Brutzelboy::playQueuedSound() {
 
   switch(current.type){
     case tts:
-      playTTS(current.source, current.language);
+      playTts(current.source, current.language);
       break;
     case file:
       playFile(current.source);
       break;
     case url:
-      playURL(current.source);
+      playUrl(current.source);
       break;
   }
 }
 
-void Brutzelboy::setVolume(int volume) {
+void Brutzelboy::setVolume(uint8_t volume) {
+  if (!(hardwareSupport & INIT_AUDIO)) {
+    Serial.println("ERROR: Hardware does not support function \"setVolume\". Please check initialization of Brutzelboy.");
+    return;
+  }
   if (volume > 21) {
     volume = 21;
   }
@@ -241,45 +335,46 @@ void audio_info(const char *info){
 }
 
 
-/**
+/************************************************************************
  * DISPLAY FUNCTION
- **/
-GFXcanvas16* Brutzelboy::createCanvas(uint16_t x, uint16_t y) {
-  GFXcanvas16* canvas = new GFXcanvas16(x, y);
-  return canvas;
-} 
-
-void Brutzelboy::printAt(GFXcanvas16* canvas, uint16_t x, uint16_t y, char* charStr) {
-  canvas->setCursor(x, y);
-  canvas->println(charStr);
-}
-
-void Brutzelboy::printDirectAt(uint16_t x, uint16_t y, char* charStr) {
-  tft.setCursor(x, y);
-  tft.println(charStr);
-}
-
-void Brutzelboy::setTextColor(uint8_t r, uint8_t g, uint8_t b) {
-  tft.setTextColor(ILI9341_WHITE);
-}
-
-void Brutzelboy::clearLCD() {
-  tft.fillScreen(ILI9341_BLACK);
-}
-
-void Brutzelboy::drawRect(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool filled) {
-  if (filled) {
-    canvas->fillRect(x, y, w, h, ILI9341_BLACK);
-  } else {
-    canvas->drawRect(x, y, w, h, ILI9341_WHITE);
+ ************************************************************************/
+void Brutzelboy::setColor(const uint8_t r, const uint8_t g, const uint8_t b) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"setColor\". Please check initialization of Brutzelboy.");
+    return;
   }
+  tft.setColor(RGB_COLOR16(r, g, b));
 }
 
-void Brutzelboy::refreshDisplay(GFXcanvas16* canvas, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
-  tft.drawRGBBitmap(x, y, canvas->getBuffer(), w, h);
+void Brutzelboy::setBackgroundColor(const uint8_t r, const uint8_t g, const uint8_t b) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"setBackgroundColor\". Please check initialization of Brutzelboy.");
+    return;
+  }
+  backgroundColor = RGB_COLOR16(r, g, b);
 }
 
-bool Brutzelboy::displayImageFromURL(const char* url) {
+void Brutzelboy::printAt(const uint16_t x, const uint16_t y, const char* charStr) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"printAt\". Please check initialization of Brutzelboy.");
+    return;
+  }
+  tft.printFixed(x, y, charStr, STYLE_NORMAL);
+}
+
+void Brutzelboy::clearDisplay() {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"clearLCD\". Please check initialization of Brutzelboy.");
+    return;
+  }
+  tft.fill(backgroundColor);
+}
+
+bool Brutzelboy::displayImageFromUrl(const uint16_t x, const uint16_t y, const char* url) {
+  if (!(hardwareSupport & INIT_LCD) || !(hardwareSupport & INIT_WIFI)) {
+    Serial.println("ERROR: Hardware does not support function \"displayImageFromURL\". Please check initialization of Brutzelboy.");
+    return false;
+  }
   HTTPClient http;
   Serial.printf("Loading image from %s\n", url);
   http.begin(url);
@@ -319,7 +414,7 @@ bool Brutzelboy::displayImageFromURL(const char* url) {
 
     // JPEG-Daten dekodieren und anzeigen
     if (JpegDec.decodeArray(jpgData, jpgSize)) {
-      renderJPEG();
+      renderJpeg(x, y);
       free(jpgData); // Speicher freigeben
       return true;
     } else {
@@ -335,7 +430,11 @@ bool Brutzelboy::displayImageFromURL(const char* url) {
 }
 
 // Funktion zum Rendern des dekodierten JPEG
-void Brutzelboy::renderJPEG() {
+void Brutzelboy::renderJpeg(const uint16_t offsetX, const uint16_t offsetY) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"renderJPEG\". Please check initialization of Brutzelboy.");
+    return;
+  }
   int16_t mcuX = 0, mcuY = 0;
 
   while (JpegDec.read()) {
@@ -350,16 +449,26 @@ void Brutzelboy::renderJPEG() {
     if ((y + mcuHeight) > JpegDec.height) {
       mcuHeight = JpegDec.height - y;
     }
+    uint8_t buffer[2*mcuWidth * mcuHeight];
+    for(uint32_t i=0; i<mcuWidth*mcuHeight; i++) {
+      uint16_t pixel = JpegDec.pImage[i];
+      buffer[2*i]=pixel>>8;
+      buffer[2*i+1]=pixel&255;
+    }
 
-    tft.drawRGBBitmap(x, y, JpegDec.pImage, mcuWidth, mcuHeight);
+    tft.drawBitmap16(offsetX + x, offsetY + y, mcuWidth, mcuHeight, buffer);
   }
 }
 
 
-/**
+/************************************************************************
  * KEY FUNCTIONS
- **/
+ ************************************************************************/
 void Brutzelboy::checkKeys() {
+  if (!(hardwareSupport & INIT_BUTTONS)) {
+    Serial.println("ERROR: Hardware does not support function \"checkKeys\". Please check initialization of Brutzelboy.");
+    return;
+  }
   // Analog Keys
   uint16_t updown = analogRead(RG_ADC_UP_DOWN);
   uint16_t leftright = analogRead(RG_ADC_LEFT_RIGHT);
@@ -434,15 +543,15 @@ void Brutzelboy::processKey(uint16_t key, bool pressed) {
   }
 }
 
-bool Brutzelboy::isKeyPressed(const uint16_t key) {
+bool Brutzelboy::isButtonPressed(const uint16_t key) {
   return keys & key;
 }
 
 
-/**
+/************************************************************************
  * LED
- **/
-void Brutzelboy::setLed(boolean on) {
+ ************************************************************************/
+void Brutzelboy::setLed(const bool on) {
   if (on) {
     digitalWrite(RG_GPIO_LED, HIGH);
   } else {
@@ -451,10 +560,14 @@ void Brutzelboy::setLed(boolean on) {
 }
 
 
-/**
+/************************************************************************
  * LCD
- **/
-void Brutzelboy::setLcd(boolean on) {
+ ************************************************************************/
+void Brutzelboy::setLcd(const bool on) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"setLcd\". Please check initialization of Brutzelboy.");
+    return;
+  }
   if (on) {
     digitalWrite(RG_GPIO_LCD_BCKL, HIGH);
   } else {
@@ -463,19 +576,23 @@ void Brutzelboy::setLcd(boolean on) {
 }
 
 
-/**
+/************************************************************************
  * LOOP
- **/
+ ************************************************************************/
 void Brutzelboy::loop() {
-  audio.loop();
-  checkKeys();
+  if (hardwareSupport & INIT_AUDIO) {
+    audio.loop();
+  }
+  if (hardwareSupport & INIT_BUTTONS) {
+    checkKeys();
+  }
 }
 
 
-/**
+/************************************************************************
  * READ CONFIG
- **/
-void parseValue(const char* s) {
+ ************************************************************************/
+void Brutzelboy::parseCredentialValues(const char* s) {
   uint8_t pos[4];
   uint8_t index = 0;
 
@@ -504,16 +621,20 @@ void parseValue(const char* s) {
   value[i] = '\0';
 
   if (strcmp(key, "ssid0") == 0) {
-    strcpy(ssid, value);
+    strcpy(this->ssid, value);
   }
   if (strcmp(key, "password0") == 0) {
-    strcpy(pwd, value);
+    strcpy(this->pwd, value);
   }
 }
 
 void Brutzelboy::readWifiConfig() {
   strcpy(ssid, "");
   strcpy(pwd, "");
+  if (!(hardwareSupport & INIT_SD_CARD)) {
+    return;
+  }
+
   File file = SD.open(wifiConfig);
   if(!file){
     Serial.println("wifi.json does not exists");
@@ -529,7 +650,7 @@ void Brutzelboy::readWifiConfig() {
       char buf[1000];
       strcpy(buf, line);
       if (strstr(buf, "{") == NULL) {
-        parseValue(buf);
+        parseCredentialValues(buf);
       }
     } else {
       line[pos++] = (char)c;

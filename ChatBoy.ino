@@ -1,3 +1,4 @@
+#include <WiFiClient.h>
 #include <IRCClient.h>
 #include "Brutzelboy.h"
 
@@ -12,7 +13,7 @@
 #define FONT_HEIGHT 10
 
 // Name des Channels in Kleinbuchstaben - z.B. "thebrutzler"
-const String twitchChannelName = "thebrutzler";
+const String twitchChannelName = "schobi";
 const String urlThumbnail  = "https://static-cdn.jtvnw.net/previews-ttv/live_user_" + twitchChannelName + "-288x162.jpg";
 uint32_t botNumber;
 
@@ -20,16 +21,15 @@ WiFiClient wifiClient;
 IRCClient client(IRC_SERVER, IRC_PORT, wifiClient);
 
 Brutzelboy boy;
-GFXcanvas16* canvas;
 
 char textBuffer[MAX_ROWS][MAX_COLS+1];
 String message;
 
 uint8_t currentRow = 0;
 
-// Timer für das LAden des Thumbnail
+// Timer für das Laden des Thumbnail
 const uint32_t interval = 60000;     // 60 Sekunden in Millisekunden
-uint32_t previousMillis = -interval; // Zeitstempel der letzten Aktion
+uint32_t previousMillis = -interval; // Zeitpunkt des letzten Ladens
 
 
 SET_LOOP_TASK_STACK_SIZE(8192);
@@ -64,7 +64,7 @@ void setup() {
   boy.begin();
 
   client.setCallback(callback);
-  boy.printDirectAt(5, 10, "Waiting for thumbnail");
+  boy.printAt(5, 10, "Waiting for thumbnail");
 
   boy.setKeyEventHandler(onKeyEvent);
   /*
@@ -78,8 +78,6 @@ void setup() {
                     &TaskText,   // Task handle to keep track of created task 
                     1);          // pin task to core
 */                    
-  canvas = boy.createCanvas(288, 78);
-
   uint64_t chipId = ESP.getEfuseMac();
   botNumber = chipId % 90000 + 10000;
 }
@@ -107,7 +105,7 @@ void loop() {
 
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
-    boy.displayImageFromURL(urlThumbnail.c_str());
+    boy.displayImageFromUrl(0, 0, urlThumbnail.c_str());
     previousMillis = currentMillis;
   }
 }
@@ -118,7 +116,7 @@ void connectToTwitch() {
   sprintf(botname, "%s%d", BOT_NAME_PREFIX, botNumber);
   if (client.connect(botname, "", TWITCH_OAUTH_TOKEN)) {
     Serial.printf("sending JOIN as %s...\n", botname);
-    char message[100];
+    char message[150];
     sprintf(message, "Listening to %s as %s", twitchChannelName, botname);
     printText(message);
 //    client.sendRaw("CAP REQ :twitch.tv/tags");
@@ -143,7 +141,7 @@ void callback(IRCMessage ircMessage) {
     }
     talk.replace("_", " ");
     talk.replace("^", " ");
-    boy.addTTSSoundToQueue(talk.c_str(), "de");
+    boy.addTtsSoundToQueue(talk.c_str(), "de");
     
     if (talk.equals("!ttscn ^") || talk.indexOf("jensefu") >= 0) {
       flash=10000;
@@ -200,11 +198,9 @@ void printText(const char* text) {
   
   yield();
   refresh=true;
-  boy.drawRect(canvas, 0, 0, 288, 78, true);
   for (int i=0; i<MAX_ROWS; i++) {
-    boy.printAt(canvas, 5, i*FONT_HEIGHT, textBuffer[i]);
+    boy.printAt(5, 162 + i*FONT_HEIGHT, textBuffer[i]);
   }
-  boy.refreshDisplay(canvas, 0, 162, 288, 78);
 }
 
 void scrollText() {

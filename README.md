@@ -14,6 +14,7 @@ Open points:
 * transform into a library, add examples
 * handle error when SD Card could not be found
 * handle PSRAM error
+* battery
 
 # Used idf-release_v5.3 (Board Manager esp32 by Espressif Systems 3.1.1) and following libraries
 * Using library lcdgfx at version 1.1.5 

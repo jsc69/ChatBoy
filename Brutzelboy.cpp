@@ -58,13 +58,13 @@ void taskPlaySound(void * pvParameters) {
 }
 
 Brutzelboy::Brutzelboy() {
-  keyEventHandler = doNothing;
+  buttonEventHandler = doNothing;
   soundEventHandler = doNothing;
   hardwareSupport = 255;
 }
 
 Brutzelboy::Brutzelboy(uint8_t hardware) {
-  keyEventHandler = doNothing;
+  buttonEventHandler = doNothing;
   soundEventHandler = doNothing;
   hardwareSupport = hardware;
 }
@@ -338,6 +338,30 @@ void audio_info(const char *info){
 /************************************************************************
  * DISPLAY FUNCTION
  ************************************************************************/
+DisplayILI9341_240x320x16_SPI* Brutzelboy::getDisplay() {
+  return &tft;
+}
+
+void Brutzelboy::setLcd(const bool on) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"setLcd\". Please check initialization of Brutzelboy.");
+    return;
+  }
+  if (on) {
+    analogWrite(RG_GPIO_LCD_BCKL, 255);
+  } else {
+    analogWrite(RG_GPIO_LCD_BCKL, 0);
+  }
+}
+
+void Brutzelboy::setBrightness(uint8_t bightness) {
+  if (!(hardwareSupport & INIT_LCD)) {
+    Serial.println("ERROR: Hardware does not support function \"setBrightness\". Please check initialization of Brutzelboy.");
+    return;
+  }
+  analogWrite(RG_GPIO_LCD_BCKL, bightness);
+}
+
 void Brutzelboy::setColor(const uint8_t r, const uint8_t g, const uint8_t b) {
   if (!(hardwareSupport & INIT_LCD)) {
     Serial.println("ERROR: Hardware does not support function \"setColor\". Please check initialization of Brutzelboy.");
@@ -464,7 +488,7 @@ void Brutzelboy::renderJpeg(const uint16_t offsetX, const uint16_t offsetY) {
 /************************************************************************
  * KEY FUNCTIONS
  ************************************************************************/
-void Brutzelboy::checkKeys() {
+void Brutzelboy::checkButtons() {
   if (!(hardwareSupport & INIT_BUTTONS)) {
     Serial.println("ERROR: Hardware does not support function \"checkKeys\". Please check initialization of Brutzelboy.");
     return;
@@ -494,10 +518,10 @@ void Brutzelboy::checkKeys() {
     rightCount = 0;
   }
 
-  processKey(KEY_UP, upCount >= trigger);
-  processKey(KEY_DOWN, downCount >= trigger);
-  processKey(KEY_LEFT, leftCount >= trigger);
-  processKey(KEY_RIGHT, rightCount >= trigger);
+  processButton(KEY_UP, upCount >= trigger);
+  processButton(KEY_DOWN, downCount >= trigger);
+  processButton(KEY_LEFT, leftCount >= trigger);
+  processButton(KEY_RIGHT, rightCount >= trigger);
 
   // Digital Keys
   uint8_t gpio=0;
@@ -525,19 +549,19 @@ void Brutzelboy::checkKeys() {
       gpio = RG_GPIO_KEY_BOOT;
       break;
     }
-    processKey(i, !digitalRead(gpio));
+    processButton(i, !digitalRead(gpio));
   }
 }
 
-void Brutzelboy::processKey(uint16_t key, bool pressed) {
+void Brutzelboy::processButton(uint16_t key, bool pressed) {
   if (pressed) {
     if (!(keys & key)) {
-      keyEventHandler(EVENT_KEY_DOWN, key);
+      buttonEventHandler(EVENT_KEY_DOWN, key);
     }
     keys |= key;
   } else {
     if (keys & key) {
-      keyEventHandler(EVENT_KEY_UP, key);
+      buttonEventHandler(EVENT_KEY_UP, key);
     }
     keys &= ~key; 
   }
@@ -561,22 +585,6 @@ void Brutzelboy::setLed(const bool on) {
 
 
 /************************************************************************
- * LCD
- ************************************************************************/
-void Brutzelboy::setLcd(const bool on) {
-  if (!(hardwareSupport & INIT_LCD)) {
-    Serial.println("ERROR: Hardware does not support function \"setLcd\". Please check initialization of Brutzelboy.");
-    return;
-  }
-  if (on) {
-    digitalWrite(RG_GPIO_LCD_BCKL, HIGH);
-  } else {
-    digitalWrite(RG_GPIO_LCD_BCKL, LOW);
-  }
-}
-
-
-/************************************************************************
  * LOOP
  ************************************************************************/
 void Brutzelboy::loop() {
@@ -584,7 +592,7 @@ void Brutzelboy::loop() {
     audio.loop();
   }
   if (hardwareSupport & INIT_BUTTONS) {
-    checkKeys();
+    checkButtons();
   }
 }
 

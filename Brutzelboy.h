@@ -1,15 +1,13 @@
 #pragma once
-#include <cstdint>
+#include <codecvt>
+#include <locale>
+
+#include <lcdgfx.h>
+#include <lcdgfx_gui.h>
+
 
 #define RG_LCD_WIDTH 288
 #define RG_LCD_HEIGHT 240
-
-#define RG_GAMEPAD_ADC1_MAP {\
-    {RG_KEY_UP,    ADC1_CHANNEL_6, ADC_ATTEN_DB_11, 3072, 4096},\
-    {RG_KEY_DOWN,  ADC1_CHANNEL_6, ADC_ATTEN_DB_11, 1024, 3072},\
-    {RG_KEY_LEFT,  ADC1_CHANNEL_5, ADC_ATTEN_DB_11, 3072, 4096},\
-    {RG_KEY_RIGHT, ADC1_CHANNEL_5, ADC_ATTEN_DB_11, 1024, 3072},\
-}
 
 // Battery
 #define RG_BATTERY_DRIVER           1
@@ -91,7 +89,6 @@
 #define EVENT_SOUND_START 1
 #define EVENT_SOUND_STOP  2
 
-
 class Brutzelboy {
 private:
   void initDisplay();
@@ -109,10 +106,10 @@ private:
   }
 
   uint16_t keys;
-  void checkKeys();
-  void processKey(uint16_t key, bool pressed);
+  void checkButtons();
+  void processButton(uint16_t key, bool pressed);
 
-  void (*keyEventHandler)(const uint8_t event, const uint16_t value);
+  void (*buttonEventHandler)(const uint8_t event, const uint16_t value);
   void (*soundEventHandler)(const uint8_t event, const uint16_t value);
 
   uint16_t backgroundColor;
@@ -158,6 +155,16 @@ public:
   void setLcd(const bool on);
   
   /**
+   * @brief Get pointer for the display
+   * @return DisplayILI9341_240x320x16_SPI*
+   */
+  DisplayILI9341_240x320x16_SPI* getDisplay();
+  /**
+   * @brief Set brightness of display
+   * @param new brightness (0-255)
+   */
+  void setBrightness(uint8_t bightness);
+  /**
    * @brief Print text on the given position
    * @param uint16_t x position
    * @param uint16_t y position
@@ -190,10 +197,6 @@ public:
    * @return bool true, if image could be loaded and displayed successfully
    */
   bool displayImageFromUrl(const uint16_t x, const uint16_t y, const char* url);
-  /**
-   * @brief Clear the framebuffer by filling it in the background color
-   */
-  void clearFramebuffer();
 
   /**
    * @brief Add a text in queue to be play via TTS
@@ -247,8 +250,8 @@ public:
    * @brief Add handler for button event
    * @param void (*userDefinedEventHandler) function to handle button events
    */
-  void setKeyEventHandler(void (*userDefinedEventHandler)(const uint8_t event, const uint16_t value)) {
-    keyEventHandler = userDefinedEventHandler; }
+  void setButtonEventHandler(void (*userDefinedEventHandler)(const uint8_t event, const uint16_t value)) {
+    buttonEventHandler = userDefinedEventHandler; }
   /**
    * @brief Add handler for sound event
    * @param void (*userDefinedEventHandler) function to handle sound events

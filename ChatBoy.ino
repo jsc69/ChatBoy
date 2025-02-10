@@ -20,14 +20,18 @@ uint32_t botNumber;
 WiFiClient wifiClient;
 IRCClient client(IRC_SERVER, IRC_PORT, wifiClient);
 
+
+// Der Brutzelboy
 Brutzelboy boy;
+// oder zur Bestimmung welche Hardware benutzt wird:
+//Brutzelboy boy(INIT_LCD | INIT_BUTTONS | INIT_SD_CARD | INIT_WIFI | INIT_AUDIO | INIT_CARTRIDGE | INIT_INFRARED);
 
 char textBuffer[MAX_ROWS][MAX_COLS+1];
 String message;
 
 uint8_t currentRow = 0;
 
-// Timer für das Laden des Thumbnail
+// Timer für das Laden der Thumbnails
 const uint32_t interval = 60000;     // 60 Sekunden in Millisekunden
 uint32_t previousMillis = -interval; // Zeitpunkt des letzten Ladens
 
@@ -35,20 +39,31 @@ uint32_t previousMillis = -interval; // Zeitpunkt des letzten Ladens
 SET_LOOP_TASK_STACK_SIZE(8192);
 
 uint16_t flash = 0;
-int8_t volume = 16;
+uint8_t volume = 16;
+uint8_t brightness = 127;
 
-void onKeyEvent(const uint8_t event, const uint16_t value) {
+// Handler für ButtonEvents
+void onButtonEvent(const uint8_t event, const uint16_t value) {
   if (event == EVENT_KEY_DOWN) {
-    if (value == KEY_OPTION || value == KEY_UP || value == KEY_RIGHT) {
+    if (value == KEY_OPTION || value == KEY_RIGHT) {
       if (volume < 21) {
         boy.setVolume(++volume);
       }
       Serial.printf("Volume set to %d\n", volume);
-    } else if (value == KEY_MENU || value == KEY_DOWN || value == KEY_LEFT) {
+    } else if (value == KEY_MENU || value == KEY_LEFT) {
       if (volume > 0) {
         boy.setVolume(--volume);
       }
       Serial.printf("Volume set to %d\n", volume);
+    }
+
+    if (value == KEY_UP && brightness < 255) {
+      brightness += 16;
+      boy.setBrightness(brightness);
+    }
+    if (value == KEY_DOWN && brightness > 15) {
+      brightness -= 16;
+      boy.setBrightness(brightness);
     }
 
     if (value == KEY_A) boy.setLcd(true);
@@ -62,11 +77,13 @@ void setup() {
   Serial.println("Welcome to ChatBoy");
 
   boy.begin();
+  boy.setBrightness(brightness);
 
   client.setCallback(callback);
   boy.printAt(5, 10, "Waiting for thumbnail");
 
-  boy.setKeyEventHandler(onKeyEvent);
+  // Event handler definieren
+  boy.setButtonEventHandler(onButtonEvent);
   /*
   //create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
   xTaskCreatePinnedToCore(
@@ -81,7 +98,6 @@ void setup() {
   uint64_t chipId = ESP.getEfuseMac();
   botNumber = chipId % 90000 + 10000;
 }
-
 
 
 void loop() {
